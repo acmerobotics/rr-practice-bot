@@ -14,6 +14,7 @@ public class TankDrive extends OpMode {
      private DcMotor leftBackMotor = null;
      private DcMotor rightFrontMotor = null;
      private DcMotor rightBackMotor = null;
+     private DcMotor lift = null;
 
     // private DcMotor liftMotor = null;
 
