@@ -7,65 +7,117 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.HardwareMap;
 
 @TeleOp(name="TankDrive", group="TankDrive")
 public class TankDrive extends OpMode {
-     private DcMotor leftFrontMotor = null;
-     private DcMotor leftBackMotor = null;
-     private DcMotor rightFrontMotor = null;
-     private DcMotor rightBackMotor = null;
-     private DcMotor lift = null;
 
-    // private DcMotor liftMotor = null;
+    private Drive drive;
+    private Lift lift;
+
+    private StickyGamepad gamepad;
+
+    private Coefficients active = Coefficients.P;
+    private boolean disable = true;
+    private double increment = .1;
+
+    private enum Coefficients {
+        P {
+            @Override
+            Coefficients next() {
+                return Coefficients.I;
+            }
+        },
+        I {
+            @Override
+            Coefficients next() {
+                return Coefficients.D;
+            }
+        },
+        D {
+            @Override
+            Coefficients next() {
+                return Coefficients.P;
+            }
+        };
+        double value;
+        abstract Coefficients next();
+    }
+
 
 
 
     public void init() {
-        leftFrontMotor = hardwareMap.dcMotor.get("leftFront");
-        leftBackMotor = hardwareMap.dcMotor.get("leftBack");
-        rightFrontMotor = hardwareMap.dcMotor.get("rightFront");
-        rightBackMotor = hardwareMap.dcMotor.get("rightBack");
-        //liftMotor = hardwareMap.dcMotor.get("lift");
-
-        rightFrontMotor.setDirection(DcMotorSimple.Direction.REVERSE);
-        rightBackMotor.setDirection(DcMotorSimple.Direction.REVERSE);
-
-
-        leftFrontMotor.setPower(0);
-        leftBackMotor.setPower(0);
-        rightFrontMotor.setPower(0);
-        rightBackMotor.setPower(0);
-        //liftMotor.setPower(0);
+        drive = new Drive (hardwareMap);
+        lift = new Lift(hardwareMap, telemetry);
+        gamepad = new StickyGamepad(gamepad1);
 
 
     }
 
     public void loop() {
+        gamepad.update();
+        if (gamepad.dpad_up) {
+            active.value += increment;
+        }
+        if (gamepad.dpad_down) {
+            active.value -= increment;
+        }
+
+        if (gamepad.dpad_left) {
+            increment /= 10;
+        }
+
+        if (gamepad.dpad_right) {
+            increment *= 10;
+        }
+
+        if (gamepad.a){
+            active = active.next();
+        }
+
+        if (gamepad.y){
+            lift.pidController.sum = 0;
+        }
+
+
+        if (gamepad.b){
+            disable = !disable;
+        }
+        telemetry.addData("active", active.name());
+        telemetry.addData("increment", increment);
+        telemetry.addData("sum", lift.pidController.sum);
+        telemetry.addData("disable", disable);
+
+        for (Coefficients value: Coefficients.values()) {
+            telemetry.addData(value.name(), value.value);
+        }
+
+        lift.pidController.p = Coefficients.P.value;
+        lift.pidController.i = Coefficients.I.value;
+        lift.pidController.d = Coefficients.D.value;
+
         double forward = -gamepad1.left_stick_y;
         double turn = -gamepad1.right_stick_x;
 
-        double leftPower = forward - turn;
-        double rightPower = forward + turn;
-        double max = Math.max(Math.abs(leftPower), Math.abs(rightPower));
+        drive.setSpeed(forward, turn);
 
-
-        if (max > 1){
-            double scale = 1/max;
-            leftPower *= scale;
-            rightPower *= scale;
+        if (gamepad.left_bumper) {
+            lift.up();
         }
 
-        leftFrontMotor.setPower(leftPower);
-        leftBackMotor.setPower(leftPower);
-        rightFrontMotor.setPower(rightPower);
-        rightBackMotor.setPower(rightPower);
+        if (gamepad.right_bumper) {
+            lift.down();
+        }
+        lift.update();
+
 
     }
 
+
+
     public void stop() {
-        leftFrontMotor.setPower(0);
-        leftBackMotor.setPower(0);
-        rightFrontMotor.setPower(0);
-        rightBackMotor.setPower(0);
+        drive.setSpeed(0, 0);
+
     }
 }
